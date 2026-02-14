@@ -40,6 +40,23 @@ services:
     security_opt:
       - seccomp:unconfined
 
+  # Shannon Web UI — dashboard for managing scans
+  webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "3000:3000"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - REPOS_DIR=/repos
+    depends_on:
+      temporal:
+        condition: service_healthy
+    volumes:
+      - ./repos:/repos:ro
+      - ./audit-logs:/app/audit-logs:ro
+
   # Optional: claude-code-router for multi-model support
   # Start with: ROUTER=true ./shannon start ...
   router:

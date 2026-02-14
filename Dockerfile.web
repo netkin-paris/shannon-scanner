@@ -1,0 +1,62 @@
+#
+# Dockerfile for Shannon Web UI
+#
+# Lightweight image: builds the React frontend and Express API server,
+# then serves them from a minimal Node.js runtime.
+#
+
+# --- Stage 1: Build frontend ---
+FROM node:22-slim AS frontend
+
+WORKDIR /build
+COPY web/package*.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+# --- Stage 2: Build backend ---
+FROM node:22-slim AS backend
+
+WORKDIR /build
+
+# Install main dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Build mcp-server first (backend imports its types)
+COPY mcp-server/ ./mcp-server/
+RUN cd mcp-server && npm ci && npm run build
+
+# Build main project
+COPY tsconfig.json ./
+COPY src/ ./src/
+RUN npx tsc
+
+# --- Stage 3: Runtime ---
+FROM node:22-slim
+
+RUN groupadd -g 1001 shannon && \
+    useradd -u 1001 -g shannon -m shannon
+
+WORKDIR /app
+
+# Install production dependencies only
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+# Copy compiled backend
+COPY --from=backend /build/dist ./dist
+
+# Copy built frontend into web/dist (where Express serves it from)
+COPY --from=frontend /build/dist ./web/dist
+
+RUN chown -R shannon:shannon /app
+
+USER shannon
+
+ENV NODE_ENV=production
+ENV PORT=3000
+
+EXPOSE 3000
+
+CMD ["node", "dist/web/server.js"]
