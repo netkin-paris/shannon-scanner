@@ -13,9 +13,9 @@
  */
 
 import { Router } from 'express';
-import type { Client } from '@temporalio/client';
 import type { PipelineInput, PipelineProgress } from '../../temporal/shared.js';
 import { sanitizeHostname } from '../../audit/utils.js';
+import { getTemporalClient } from '../temporal-client.js';
 
 const PROGRESS_QUERY = 'getProgress';
 
@@ -33,12 +33,13 @@ interface StartScanBody {
   pipelineTesting?: boolean;
 }
 
-export function createScansRouter(client: Client): Router {
+export function createScansRouter(): Router {
   const router = Router();
 
   // List all Shannon workflows
   router.get('/', async (_req, res) => {
     try {
+      const client = await getTemporalClient();
       const scans: ScanListItem[] = [];
 
       const workflows = client.workflow.list({
@@ -64,7 +65,7 @@ export function createScansRouter(client: Client): Router {
       res.json(scans);
     } catch (error) {
       console.error('Failed to list scans:', error);
-      res.status(500).json({ error: 'Failed to list scans' });
+      res.status(500).json({ error: 'Failed to connect to Temporal' });
     }
   });
 
@@ -78,6 +79,7 @@ export function createScansRouter(client: Client): Router {
         return;
       }
 
+      const client = await getTemporalClient();
       const hostname = sanitizeHostname(body.url);
       const workflowId = `${hostname}_shannon-${Date.now()}`;
 
@@ -113,6 +115,7 @@ export function createScansRouter(client: Client): Router {
         return;
       }
 
+      const client = await getTemporalClient();
       const handle = client.workflow.getHandle(workflowId);
 
       // Try querying progress (works for running workflows)

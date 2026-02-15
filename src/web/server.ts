@@ -8,6 +8,8 @@
  * Shannon Web App — Express API server.
  *
  * Provides REST endpoints for managing scans and serves the React frontend.
+ * Temporal connection is lazy — the server starts immediately and connects
+ * to Temporal on first API request.
  *
  * Endpoints:
  *   GET  /api/scans       — List all workflows (past + running)
@@ -26,24 +28,21 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createScansRouter } from './routes/scans.js';
 import { createReposRouter } from './routes/repos.js';
-import { createTemporalClient, closeTemporalConnection } from './temporal-client.js';
+import { closeTemporalConnection, getTemporalAddress } from './temporal-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
-async function main(): Promise<void> {
+function main(): void {
   const app = express();
 
   app.use(cors());
   app.use(express.json());
 
-  // Initialize Temporal client
-  const temporalClient = await createTemporalClient();
-
-  // API routes
-  app.use('/api/scans', createScansRouter(temporalClient));
+  // API routes (Temporal client is resolved lazily per-request)
+  app.use('/api/scans', createScansRouter());
   app.use('/api/repos', createReposRouter());
 
   // Serve static frontend (built React app)
@@ -51,12 +50,14 @@ async function main(): Promise<void> {
   app.use(express.static(staticDir));
 
   // SPA fallback — serve index.html for all non-API routes
-  app.get('*', (_req, res) => {
+  // Express 5 requires named wildcard parameters
+  app.get('/{*splat}', (_req, res) => {
     res.sendFile(path.join(staticDir, 'index.html'));
   });
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Shannon Web UI listening on http://0.0.0.0:${PORT}`);
+    console.log(`Temporal address: ${getTemporalAddress()} (lazy connect)`);
   });
 
   // Graceful shutdown
@@ -71,7 +72,4 @@ async function main(): Promise<void> {
   process.on('SIGTERM', shutdown);
 }
 
-main().catch((err) => {
-  console.error('Failed to start web server:', err);
-  process.exit(1);
-});
+main();

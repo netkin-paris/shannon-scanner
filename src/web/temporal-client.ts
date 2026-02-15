@@ -7,24 +7,47 @@
 /**
  * Shared Temporal client connection for the web server.
  *
- * Maintains a single long-lived connection to Temporal that is reused
- * across all API requests.
+ * Uses lazy initialization — connects on first use so the web server
+ * can start even when Temporal is not yet available.  Reconnects
+ * automatically if the connection drops.
  */
 
 import { Connection, Client } from '@temporalio/client';
 
 let connection: Connection | null = null;
 let client: Client | null = null;
+let connecting: Promise<Client> | null = null;
 
-export async function createTemporalClient(): Promise<Client> {
-  const address = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
-  console.log(`Connecting to Temporal at ${address}...`);
+export function getTemporalAddress(): string {
+  return process.env.TEMPORAL_ADDRESS || 'localhost:7233';
+}
 
-  connection = await Connection.connect({ address });
-  client = new Client({ connection });
+export async function getTemporalClient(): Promise<Client> {
+  if (client) return client;
 
-  console.log('Connected to Temporal.');
-  return client;
+  // Deduplicate concurrent connection attempts
+  if (connecting) return connecting;
+
+  connecting = (async () => {
+    const address = getTemporalAddress();
+    console.log(`Connecting to Temporal at ${address}...`);
+
+    try {
+      connection = await Connection.connect({ address });
+      client = new Client({ connection });
+      console.log('Connected to Temporal.');
+      return client;
+    } catch (error) {
+      // Reset so next call retries
+      connection = null;
+      client = null;
+      throw error;
+    } finally {
+      connecting = null;
+    }
+  })();
+
+  return connecting;
 }
 
 export async function closeTemporalConnection(): Promise<void> {
