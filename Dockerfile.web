@@ -11,7 +11,25 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-# --- Build backend & run ---
+# --- Build backend ---
+FROM node:22-slim AS backend-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY tsconfig.json ./
+COPY src/ ./src/
+RUN npx tsc
+
+# --- Runtime ---
 FROM node:22-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,14 +40,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install root dependencies (backend)
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy source and compile
-COPY tsconfig.json ./
-COPY src/ ./src/
-RUN npx tsc
+# Copy compiled backend
+COPY --from=backend-builder /app/dist ./dist
 
 # Copy built frontend
 COPY --from=frontend-builder /build/web/dist ./web/dist
