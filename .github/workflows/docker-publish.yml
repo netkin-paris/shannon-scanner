@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 env:
-  REGISTRY: docker.io
+  IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/n2-shannon
 
 jobs:
   build-worker:
@@ -31,10 +31,10 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/shannon-worker
+          images: ${{ env.IMAGE }}
           tags: |
-            type=sha,prefix=
-            type=raw,value=latest
+            type=sha,prefix=worker-
+            type=raw,value=worker-latest
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -70,10 +70,10 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/shannon-web
+          images: ${{ env.IMAGE }}
           tags: |
-            type=sha,prefix=
-            type=raw,value=latest
+            type=sha,prefix=web-
+            type=raw,value=web-latest
 
       - name: Build and push
         uses: docker/build-push-action@v6
