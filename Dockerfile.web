@@ -22,9 +22,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Build mcp-server first (backend imports from mcp-server/dist/)
+COPY mcp-server/package*.json ./mcp-server/
+RUN cd mcp-server && npm ci
+COPY mcp-server/tsconfig.json ./mcp-server/
+COPY mcp-server/src/ ./mcp-server/src/
+RUN cd mcp-server && npx tsc
+
+# Build main backend
 COPY package*.json ./
 RUN npm ci
-
 COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npx tsc
@@ -43,8 +50,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy compiled backend
+# Copy compiled backend and mcp-server
 COPY --from=backend-builder /app/dist ./dist
+COPY --from=backend-builder /app/mcp-server/dist ./mcp-server/dist
 
 # Copy built frontend
 COPY --from=frontend-builder /build/web/dist ./web/dist
